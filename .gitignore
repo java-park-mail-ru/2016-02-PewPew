@@ -40,3 +40,8 @@ crashlytics.properties
 crashlytics-build.properties
 fabric.properties
 
+# TestTxt
+curl.txt
+
+#Static
+static/
