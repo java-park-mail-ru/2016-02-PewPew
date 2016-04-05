@@ -1,4 +1,4 @@
-package com.pewpew.pewpew.additional;
+package com.pewpew.pewpew.common;
 
 import org.jetbrains.annotations.NotNull;
 
@@ -6,15 +6,15 @@ import java.util.Random;
 
 public class RandomString {
 
-    private static final char[] symbols;
+    private static final char[] SYMBOLS;
 
     static {
-        StringBuilder tmp = new StringBuilder();
+        final StringBuilder tmp = new StringBuilder();
         for (char ch = '0'; ch <= '9'; ++ch)
             tmp.append(ch);
         for (char ch = 'a'; ch <= 'z'; ++ch)
             tmp.append(ch);
-        symbols = tmp.toString().toCharArray();
+        SYMBOLS = tmp.toString().toCharArray();
     }
 
 
@@ -23,16 +23,15 @@ public class RandomString {
     private final char[] buf;
 
 
-    public RandomString(int length) {
-        if (length < 1)
-            throw new IllegalArgumentException("length < 1: " + length);
-        buf = new char[length];
+    @SuppressWarnings("unused")
+    public RandomString() {
+        buf = new char[10];
     }
 
     @NotNull
     public String nextString() {
         for (int idx = 0; idx < buf.length; ++idx)
-            buf[idx] = symbols[random.nextInt(symbols.length)];
+            buf[idx] = SYMBOLS[random.nextInt(SYMBOLS.length)];
         return new String(buf);
     }
 }

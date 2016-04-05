@@ -1,51 +1,77 @@
 package com.pewpew.pewpew.main;
 
-import com.pewpew.pewpew.mongo.MongoModule;
-import com.pewpew.pewpew.servlet.*;
+import com.pewpew.pewpew.common.Settings;
+import com.pewpew.pewpew.rest.ScoreboardService;
+import com.pewpew.pewpew.rest.SessionService;
+import com.pewpew.pewpew.rest.UserService;
+import org.eclipse.jetty.server.Handler;
 import org.eclipse.jetty.server.Server;
+import org.eclipse.jetty.server.ServerConnector;
+import org.eclipse.jetty.server.handler.DefaultHandler;
+import org.eclipse.jetty.server.handler.HandlerCollection;
+import org.eclipse.jetty.server.handler.ResourceHandler;
 import org.eclipse.jetty.servlet.ServletContextHandler;
 import org.eclipse.jetty.servlet.ServletHolder;
+import org.glassfish.hk2.utilities.binding.AbstractBinder;
+import org.glassfish.jersey.server.ResourceConfig;
+import org.glassfish.jersey.servlet.ServletContainer;
+
 
 public class Main {
-    public static void main(String[] args) throws Exception, InterruptedException {
-        if (args.length != 1) {
-            System.out.append("Use port as the first argument");
+    @SuppressWarnings("OverlyBroadThrowsClause")
+    public static void main(String[] args) throws Exception {
+        int port = -1;
+        String staticPath = "";
+        if (args.length == 2) {
+            port = Integer.valueOf(args[0]);
+            staticPath = String.valueOf(args[1]);
+        } else {
+            System.err.println("Specify port");
             System.exit(1);
         }
 
-        String portString = args[0];
-        int port = Integer.valueOf(portString);
+        final Server server = new Server();
+        final ServerConnector connector = new ServerConnector(server);
+        connector.setHost(Settings.SERVER_HOST);
+        connector.setPort(port);
+        server.addConnector(connector);
 
-        Server server = new Server(port);
-        MongoModule mongoModule = MongoModule.getInstanse();
+        final ServletContextHandler contextHandler = new ServletContextHandler(server, "/", ServletContextHandler.SESSIONS);
 
-        AccountService accountService = new AccountService();
+        final Context context = new Context();
+        try {
+            context.put(AccountService.class, new AccountServiceImpl());
 
-        ServletContextHandler context = new ServletContextHandler(ServletContextHandler.SESSIONS);
+            final ResourceConfig config = new ResourceConfig(SessionService.class,
+                    UserService.class, ScoreboardService.class, GsonMessageBodyHandler.class);
 
-        RegistrationService registrationService = new RegistrationService(accountService);
-        context.addServlet(new ServletHolder(registrationService),"/user");
+            config.register(new AbstractBinder() {
+                @Override
+                protected void configure() {
+                    bind(context);
+                }
+            });
 
-        AuthorizationService authorizationService = new AuthorizationService(accountService);
-        context.addServlet(new ServletHolder(authorizationService), "/session");
+            final ServletHolder servletHolder = new ServletHolder(new ServletContainer(config));
 
-        ScoreboardService scoreboardService = new ScoreboardService();
-        context.addServlet(new ServletHolder(scoreboardService), "/scoreboard");
+            contextHandler.addServlet(servletHolder, "/*");
 
-        UserService userService = new UserService(accountService);
-        context.addServlet(new ServletHolder(userService), "/user/*");
+            final ResourceHandler resourceHandler = new ResourceHandler();
+            resourceHandler.setDirectoriesListed(true);
+            resourceHandler.setResourceBase(staticPath);
 
-        server.setHandler(context);
-        server.start();
-        server.join();
+            final HandlerCollection handlerCollection = new HandlerCollection();
+            handlerCollection.setHandlers(new Handler[]{resourceHandler,
+                    contextHandler, new DefaultHandler()});
+
+            server.setHandler(handlerCollection);
+            server.start();
+            server.join();
+        } catch (InterruptedException e) {
+            System.err.println("Database error");
+            System.exit(1);
+        }
     }
 }
-
-// curl -H "Content-Type: application/json" -X POST -d '{"login":"xyz","password":"xyz"}' http://localhost:8080/session
-// curl -H "Content-Type: application/json" -X POST -b cookies.txt -d '{"login":"xyz","password":"xyz"}' http://localhost:8080/session
-// curl -H "Content-Type: application/json" -X POST -c cookies.txt -d '{"email":"xyz", "login": "xyz","password":"xyz"}' http://localhost:8080/user
-// curl -X DELETE "http://localhost:8080/user/56d20a7c92b9e55ff8503002"
-// curl -i -H "Accept: application/json" -H "Content-Type: application/json" http://localhost:8080/scoreboard
-// curl -i -H "Accept: application/json" -H "Content-Type: application/json" -b cookies.txt http://localhost:8080/user/56d20e2392b9e560b1514a15
 
 

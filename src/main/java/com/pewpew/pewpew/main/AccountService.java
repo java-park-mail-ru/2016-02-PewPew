@@ -1,34 +1,33 @@
 package com.pewpew.pewpew.main;
 
 import com.pewpew.pewpew.model.User;
-import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.HashMap;
-import java.util.Map;
+import java.util.List;
 
-public class AccountService {
+public interface AccountService {
 
-    private Map<String, User> tokens = new HashMap<>();
+    List<User> getTop();
 
-    public boolean addToken(String token, User user) {
-        return tokens.put(token, user) != null;
-    }
+    void addToken(String token, User user);
 
-    @Nullable
-    public User getUserByToken(String token) {
-        return tokens.get(token);
-    }
+    void addUser(User user);
 
-    public boolean updateUser(String token, User editedUser) {
-        return tokens.replace(token, editedUser) != null;
-    }
+    User getUserByToken(String token);
 
-    public boolean deleteUser(User user) {
-        return tokens.values().remove(user);
-    }
+    User getUser(String login, String password);
 
-    public boolean closeToken(String token) {
-        return tokens.remove(token) == null;
-    }
+    User getUserById(String userId);
+
+    void updateUser(String token, @Nullable User editedUser);
+
+    Boolean userExists(User newUser);
+
+    void deleteUser(User user);
+
+    Boolean closeToken(String token);
+
+    void delete(User user);
+
+
 }
