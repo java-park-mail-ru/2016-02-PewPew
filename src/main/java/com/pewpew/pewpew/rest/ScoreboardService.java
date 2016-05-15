@@ -28,6 +28,8 @@ public class ScoreboardService {
         final AccountService accountService = context.get(AccountService.class);
         try {
             final List<User> query = accountService.getTop();
+//            final JsonArray array = new JsonArray();
+//            query.stream().forEach(user->array.add(new JsonObject(user)));
             return Response.ok(Response.Status.OK).entity(new Users(query)).build();
         } catch (RuntimeException e) {
             e.printStackTrace();
