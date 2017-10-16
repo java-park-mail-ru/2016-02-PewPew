@@ -14,9 +14,13 @@ public class WebSocketServiceImpl implements WebSocketService {
         userSockets.put(userId, gameWebSocket);
     }
 
+    public void removeUser(String userId) {
+        userSockets.remove(userId);
+    }
     @Override
-    public void notifyStartGame(String user) {
+    public void notifyStartGame(String user, String enemy) {
         final GameWebSocket gameWebSocket = userSockets.get(user);
+        gameWebSocket.setEnemyName(enemy);
         gameWebSocket.startGame();
     }
 
@@ -29,6 +33,7 @@ public class WebSocketServiceImpl implements WebSocketService {
         if (gameWebSocket.getUserSession() == null) {
             userSockets.remove(userSessionId);
         }
+        gameWebSocket.setGameEnded(true);
         gameWebSocket.sendMessage(message);
     }
 
@@ -40,4 +45,9 @@ public class WebSocketServiceImpl implements WebSocketService {
         final Gson gson = new Gson();
         gameWebSocket.sendMessage(gson.toJson(jsonObject));
     }
+
+    public Boolean containsUser(String user) {
+        return userSockets.containsKey(user);
+    }
+
 }

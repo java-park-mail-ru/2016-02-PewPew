@@ -1,5 +1,13 @@
 package com.pewpew.pewpew.websoket;
 
+import com.pewpew.pewpew.common.TimeHelper;
+import com.pewpew.pewpew.messagesystem.Abonent;
+import com.pewpew.pewpew.messagesystem.Address;
+import com.pewpew.pewpew.messagesystem.MessageSystem;
+import com.pewpew.pewpew.messages.togamemechanics.MessageGameChanges;
+import com.pewpew.pewpew.messages.togamemechanics.MessagePauseGame;
+import com.pewpew.pewpew.messages.togamemechanics.MessageRegister;
+import com.pewpew.pewpew.messages.togamemechanics.MessageRemoveSession;
 import com.pewpew.pewpew.model.GameChanges;
 import org.eclipse.jetty.websocket.api.Session;
 import org.eclipse.jetty.websocket.api.annotations.OnWebSocketClose;
@@ -10,7 +18,6 @@ import org.eclipse.jetty.websocket.api.annotations.WebSocket;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonSyntaxException;
-import com.pewpew.pewpew.mechanics.GameMechanics;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.eclipse.jetty.websocket.api.WebSocketException;
@@ -18,27 +25,39 @@ import org.jetbrains.annotations.NotNull;
 
 
 import java.io.IOException;
+import java.time.Clock;
+import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 @SuppressWarnings("ALL")
 @WebSocket
-public class GameWebSocket {
+public class GameWebSocket implements Abonent {
     static final Logger LOGGER = LogManager.getLogger(GameWebSocket.class);
 
+    private WebSocketService webSocketService;
+
     private final String userName;
+    private String enemyName;
     private Session userSession;
+    private Boolean gameEnded;
+    private final Address address = new Address();
+    private final Address gameMechanicsAddress;
 
     @NotNull
-    private final GameFrameHandler messageHandler;
-    @NotNull
-    final WebSocketService webSocketService;
-    @NotNull
-    final GameMechanics gameMechanics;
+    private final Clock clock = Clock.systemDefaultZone();
 
-    public GameWebSocket(String userName, @NotNull WebSocketService webSocketService, @NotNull GameMechanics gameMechanics) {
+    private final long stepTime = 50;
+    @NotNull
+    private final MessageSystem messageSystem;
+
+
+    public GameWebSocket(String userName, MessageSystem messageSystem,
+                         Address gameMechanicsAddress, WebSocketService webSocketService) {
         this.userName = userName;
+        this.messageSystem = messageSystem;
+        messageSystem.addService(this);
+        this.gameMechanicsAddress = gameMechanicsAddress;
         this.webSocketService = webSocketService;
-        this.gameMechanics = gameMechanics;
-        this.messageHandler = new GameFrameHandler(gameMechanics);
     }
 
 
@@ -46,7 +65,8 @@ public class GameWebSocket {
     public void onOpen(Session session) {
         userSession = session;
         webSocketService.addUser(this, userName);
-        gameMechanics.addUser(userName);
+        MessageRegister registerMessage = new MessageRegister(address, gameMechanicsAddress, userName);
+        messageSystem.sendMessage(registerMessage);
         LOGGER.info("onOpen");
         System.out.println("open websocket");
     }
@@ -54,9 +74,18 @@ public class GameWebSocket {
     @OnWebSocketClose
     public void onClose(int statusCode, String reason) {
         System.out.println("closing websocket");
-        gameMechanics.removeSession(userSession);
+        if (gameEnded) {
+            MessageRemoveSession messageRemoveSession =
+                    new MessageRemoveSession(address, gameMechanicsAddress, userName);
+            messageSystem.sendMessage(messageRemoveSession);
+            gameEnded = false;
+            webSocketService.removeUser(userName);
+        } else {
+            MessagePauseGame messagePauseGame = new MessagePauseGame(address, gameMechanicsAddress, userName);
+            messageSystem.sendMessage(messagePauseGame);
+            webSocketService.removeUser(userName);
+        }
         this.userSession = null;
-        gameMechanics.closeGameSession(userName);
     }
 
     @OnWebSocketMessage
@@ -71,15 +100,18 @@ public class GameWebSocket {
         if (gameFrame.getBullet() != null) {
             System.out.println("I got message:" + gameFrame.getBullet());
         }
-        final String enemyId = gameMechanics.getEnemy(userName);
-        messageHandler.handle(gameFrame, enemyId);
+        MessageGameChanges messageGameChanges = new MessageGameChanges(address, gameMechanicsAddress, gameFrame, enemyName);
+        messageSystem.sendMessage(messageGameChanges);
+
     }
 
     public void sendMessage(String message) {
-        try {
-            this.userSession.getRemote().sendString(message);
-        } catch (IOException e) {
-            e.printStackTrace();
+        if (this.userSession != null && message != null) {
+            try {
+                this.userSession.getRemote().sendString(message);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
         }
     }
 
@@ -107,11 +139,24 @@ public class GameWebSocket {
         }
     }
 
+    public void setGameEnded(Boolean gameEnded) {
+        this.gameEnded = gameEnded;
+    }
+
     public Session getUserSession() {
         return userSession;
     }
 
     public void setUserSession(Session userSession) {
         this.userSession = userSession;
+    }
+
+    @Override
+    public Address getAddress() {
+        return address;
+    }
+
+    public void setEnemyName(String enemyName) {
+        this.enemyName = enemyName;
     }
 }

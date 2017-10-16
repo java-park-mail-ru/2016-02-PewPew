@@ -2,18 +2,16 @@ package com.pewpew.pewpew.mechanics;
 
 import com.pewpew.pewpew.common.Point;
 import com.pewpew.pewpew.model.*;
+import org.jetbrains.annotations.NotNull;
 
 import java.awt.*;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.time.Clock;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.Properties;
-import java.util.Random;
-import java.util.concurrent.TimeUnit;
 
 public class GameSession {
 
@@ -24,6 +22,7 @@ public class GameSession {
     private String playerTwo;
 
     private Boolean playerOneWon;
+    private Boolean paused;
 
     private GameFrame gameFrame;
 
@@ -78,10 +77,11 @@ public class GameSession {
         final Double ratio = Double.valueOf(property.getProperty("block.ratio"));
         final Integer x0 = Integer.valueOf(property.getProperty("block.x0"));
         final Integer y0 = Integer.valueOf(property.getProperty("block.y0"));
-        putBlocks(nX, 4, ratio, x0, y0);
+        putBlocks(nX, ratio, x0, y0);
 
         this.xMax = xMax;
         this.yMax = yMax;
+        this.paused = false;
     }
 
     public ArrayList<Bullet> getBulletObjects() {
@@ -100,7 +100,8 @@ public class GameSession {
         }
     }
 
-    public void moveBullets(long timeBefore) {
+    @SuppressWarnings("OverlyComplexMethod")
+    public synchronized void moveBullets(long timeBefore) {
         final Iterator<Bullet> iterator = gameFrame.getBullets().iterator();
         final Rectangle userOne = gameFrame.getPlayer().getRect(yMax.intValue());
         final Rectangle userTwo = gameFrame.getEnemy().getRectEnemy();
@@ -126,7 +127,7 @@ public class GameSession {
                 System.out.println("removed bullet: " + bullet.getBulletId());
                 iterator.remove();
             }
-            Iterator<Barrier> barrierIterator = gameFrame.getBarriers().iterator();
+            final Iterator<Barrier> barrierIterator = gameFrame.getBarriers().iterator();
             while (barrierIterator.hasNext()){
                 final Barrier barrier = barrierIterator.next();
                 if (tryToCollide(bullet, barrier)) {
@@ -136,17 +137,21 @@ public class GameSession {
                     }
                 }
             }
+            if (bullet.getCollisions() > 20) {
+                System.out.println("Object should be removed");
+                iterator.remove();
+            }
         }
     }
 
-    public void putBlocks(Integer nX, Integer nY, Double ratio, Integer x0, Integer y0) {
-        Integer max = 100;
-        Integer period = 50;
+    public void putBlocks(Integer nX, Double ratio, Integer x0, Integer y0) {
+        final Integer max = 100;
+        final Integer period = 50;
         for (Integer i = 0; i < nX; ++i) {
-            for (Integer j = 0; j < nY; ++j) {
+            for (Integer j = 0; j < (Integer) 4; ++j) {
                 final Barrier barrier = new Barrier();
                 barrier.setPosX((double) (i * period + x0));
-                barrier.setPosY((double)(j * period + y0));
+                barrier.setPosY((double) (j * period + y0));
 
                 final Double randomNumber = (Math.random() * (max + 1));
 
@@ -160,7 +165,8 @@ public class GameSession {
     }
     
 
-    private Boolean tryToCollide(Bullet bullet, Barrier barrier) {
+    @NotNull
+    private synchronized Boolean tryToCollide(Bullet bullet, Barrier barrier) {
         final Double collisionDistX = Math.pow(((bullet.getSizeX() + barrier.getSizeX())/2), 2);
         final Double collisionDistY = Math.pow(((bullet.getSizeY() + barrier.getSizeY())/2), 2);
 
@@ -170,16 +176,14 @@ public class GameSession {
         return ((collisionDistX > distSquare) || (collisionDistY > distSquare));
     }
 
-    private void collide(Bullet bullet, Barrier barrier) {
+    private synchronized void collide(Bullet bullet, Barrier barrier) {
         final Double bulletPosX = bullet.getPosX() - (barrier.getPosX() - barrier.getSizeX()/2);
         final Double bulletPosY = bullet.getPosY() - (barrier.getPosY() - barrier.getSizeY()/2);
 
         final Double k = bullet.getVelY() / bullet.getVelX();
         final Double b = bulletPosY - k * bulletPosX;
-        final Random rand = new Random();
 
 
-        //TODO: Refactoring. Remove temporary wariables.
         double tempX = (bullet.getVelX() > 0)? 0 : barrier.getSizeX();
         double tempY = k * tempX + b;
         final Point intersectionWithParallelX = new Point(tempX, tempY);
@@ -189,21 +193,22 @@ public class GameSession {
         final Point intersectionWithParallelY = new Point(tempX, tempY);
 
         final Double fault = 3.0;
-        final Double absoluteDeviation = 0.05;
-        final Double deviation = (rand.nextBoolean())? absoluteDeviation: -absoluteDeviation;
         
         if(Math.abs(intersectionWithParallelY.getX() - intersectionWithParallelX.getX()) < fault) {
             this.moveToIntersectionPoint(bullet, barrier, intersectionWithParallelX);
-            bullet.setVelX(-bullet.getVelX() + deviation);
-            bullet.setVelY(-bullet.getVelY() + deviation);
+            bullet.setVelX(-bullet.getVelX());
+            bullet.setVelY(-bullet.getVelY());
+            bullet.setCollisions(bullet.getCollisions() + 1);
         }
-        else if ((intersectionWithParallelX.getX() >= 0) && (intersectionWithParallelX.getX() <= barrier.getSizeX())) {
+        else if ((intersectionWithParallelY.getX() >= 0) && (intersectionWithParallelY.getX() <= barrier.getSizeX())) {
             moveToIntersectionPoint(bullet, barrier, intersectionWithParallelX);
-            bullet.setVelY(-bullet.getVelY() + deviation);
+            bullet.setVelY(-bullet.getVelY());
+            bullet.setCollisions(bullet.getCollisions() + 1);
         }
-        else if ((intersectionWithParallelY.getX() >= 0) && (intersectionWithParallelY.getX() <= barrier.getSizeY())) {
+        else if ((intersectionWithParallelX.getY() >= 0) && (intersectionWithParallelX.getY() <= barrier.getSizeY())) {
             moveToIntersectionPoint(bullet, barrier, intersectionWithParallelY);
-            bullet.setVelX(-bullet.getVelX() + deviation);
+            bullet.setVelX(-bullet.getVelX());
+            bullet.setCollisions(bullet.getCollisions() + 1);
         }
     }
 
@@ -212,5 +217,11 @@ public class GameSession {
         bullet.setPosY(intersectionPoint.getY() + (barrier.getPosY() - barrier.getSizeY()/2));
     }
 
+    public void setPaused(Boolean paused) {
+        this.paused = paused;
+    }
 
+    public Boolean getPaused() {
+        return paused;
+    }
 }

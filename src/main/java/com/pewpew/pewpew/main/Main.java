@@ -1,10 +1,8 @@
 package com.pewpew.pewpew.main;
 
 import com.mongodb.MongoException;
-import com.mongodb.MongoSocketOpenException;
-import com.pewpew.pewpew.common.Settings;
-import com.pewpew.pewpew.mechanics.GameMechanics;
 import com.pewpew.pewpew.mechanics.GameMechanicsImpl;
+import com.pewpew.pewpew.messagesystem.MessageSystem;
 import com.pewpew.pewpew.rest.ScoreboardService;
 import com.pewpew.pewpew.rest.SessionService;
 import com.pewpew.pewpew.rest.UserService;
@@ -24,10 +22,6 @@ import org.glassfish.jersey.servlet.ServletContainer;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.net.BindException;
-import java.net.ConnectException;
-import java.net.UnknownHostException;
 import java.util.Properties;
 
 
@@ -71,12 +65,15 @@ public class Main {
 
             contextHandler.addServlet(servletHolder, "/*");
 
+            final MessageSystem messageSystem = new MessageSystem();
+
             final WebSocketService webSocketService = new WebSocketServiceImpl();
-            final GameMechanics gameMechanics = new GameMechanicsImpl(webSocketService);
+
+            final GameMechanicsImpl gameMechanics = new GameMechanicsImpl(messageSystem, webSocketService);
+
+
             contextHandler.addServlet(new ServletHolder(new GameSocketServelet(
-                    webSocketService, gameMechanics)), "/ws");
-
-
+                    accountService, messageSystem, gameMechanics.getAddress(), webSocketService)), "/ws");
 
             final ResourceHandler resourceHandler = new ResourceHandler();
             resourceHandler.setDirectoriesListed(true);
@@ -89,7 +86,7 @@ public class Main {
             server.setHandler(handlerCollection);
 
             server.start();
-            gameMechanics.run();
+            gameMechanics.start();
         } catch (MongoException e) {
             e.printStackTrace();
             System.exit(1);
